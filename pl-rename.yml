@@ -1,0 +1,35 @@
+---
+- name: Playbook name
+  hosts: "{{ hosts_group }}"
+  become: yes
+
+  tasks:
+  - name: add current hostname to /etc/hosts
+    shell: grep 'PREVIOUS HOSTNAME' /etc/hosts || printf "\n\n### PREVIOUS HOSTNAME\n127.0.0.1 $(hostname)\n::1 $(hostname)\n" >> /etc/hosts
+
+  - name: copy hostnames.json
+    copy:
+      src: ./hostnames.json
+      dest: /tmp/hostnames.json
+
+  - name: Running  rename_hosts script
+    script:  rename_hosts.py  /tmp/hostnames.json
+
+
+
+  # ZABBIX SECTION
+  - name: Save new hostname as variable
+    shell: hostname
+    register: new_hostname
+
+  - name: Rename host in zabbix_agent.conf
+    lineinfile:
+      path: /etc/zabbix/zabbix_agentd.conf
+      regexp: '^Hostname='
+      line: Hostname={{ new_hostname.stdout }}
+
+  - name: Restart zabbix-agent
+    systemd:
+      state: restarted
+      enabled: yes
+      name: zabbix-agent
